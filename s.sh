@@ -2,4 +2,4 @@ cd MemoryManager
 make
 cd ..
 make
-./a
+valgrind ./a

@@ -474,7 +474,11 @@ unsigned int testRepeatedShutdown()
 
     size_t numberOfWords2 = 20;
 
+    std::cout << "Before rip" << std::endl;
+
     memoryManager.initialize(numberOfWords2);
+
+    std::cout << "RIP";
 
     uint16_t* testArray6 = static_cast<uint16_t*>(memoryManager.allocate(sizeof(uint16_t) * 1));
     uint16_t* testArray7 = static_cast<uint16_t*>(memoryManager.allocate(sizeof(uint16_t) * 2));

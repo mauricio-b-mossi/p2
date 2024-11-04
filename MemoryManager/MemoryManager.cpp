@@ -46,12 +46,13 @@ void HoleList::print(){
 
 // HoleList counts and produces list, insert if allocate is successful.
 void HoleList::clear(){
-    if(mHead == nullptr){
+    this->mCount = 0;
+    if(this->mHead == nullptr){
         return;
     }
-    mHead->clearDescendants();
+    this->mHead->clearDescendants();
     delete mHead;
-    mHead = nullptr;
+    this->mHead = nullptr;
 }
 
 HoleList::~HoleList(){
@@ -225,15 +226,19 @@ MemoryManager::~MemoryManager(){
 }
 
 void MemoryManager::initialize(size_t sizeInWords){
-    if(sizeInWords > 65535){ // Weird spec says 65536 but UINT16_MAX is 65535.
+    if(sizeInWords > 65536){ // Weird spec says 65536 but UINT16_MAX is 65535.
         return; // Fail silently...
     }
     this->shutdown();
+    std::cout<<"This rip"<<std::endl;
     this->mMemorySizeInWords = sizeInWords;
     this->mMemoryList = new u_int8_t[this->mMemorySizeInWords * this->mWordSizeInBytes];
+    std::cout<<"This rip"<<std::endl;
     this->mHoleList.mHead = new Hole{0, (u_int16_t)(this->mMemorySizeInWords)}; // hole list only stores blocks and words not bytes.
-    this->mHoleList.mCount++; // This think.
-    this->mHoleList.print();
+    this->mHoleList.mCount++;
+    std::cout<<"This rip"<<std::endl;
+    //this->mHoleList.print();
+    std::cout<<"This rip"<<std::endl;
 }
 
 void MemoryManager::shutdown(){
@@ -254,12 +259,16 @@ void *MemoryManager::allocate(size_t sizeInBytes){
     }
     u_int16_t wordsLen = ceil_div(sizeInBytes, this->mWordSizeInBytes);
 
+    std::cout << "Wordlen" << wordsLen << std::endl;
+
     if(wordsLen > this->mMemorySizeInWords){
+      std::cout << "nulptr due to memSize" << std::endl;
         return nullptr;
     }
 
     void* l = this->getList();
     if(l == nullptr){
+        std::cout << "nulptr due to no space" << std::endl;
         return nullptr; // This means no space left.
     }
     u_int16_t* list = (u_int16_t*)l;
@@ -318,12 +327,11 @@ int MemoryManager::dumpMemoryMap(char* filename){
     u_int16_t *nl = (u_int16_t *)l;
     u_int16_t count = nl[0];
 
-    oss << "[" << count << ", ";
-    for(int i = 1; i < count * 2 + 1; i++){
-      if (i < count * 2) {
-        std::cout << nl[i] << ", ";
+    for(int i = 0; i < count; i++){
+      if (i < count - 1) {
+        oss << "[" << nl[2*i + 1] << ", " << nl[2*i + 2] << "] - ";
       } else {
-        std::cout << nl[i] << "]";
+        oss << "[" << nl[2*i + 1] << ", " << nl[2*i + 2] << "]";
       }
     }
 
@@ -347,31 +355,33 @@ int MemoryManager::dumpMemoryMap(char* filename){
 
 void *MemoryManager::getBitmap(){
   void*l = this->getList(); // CLEAN
-  if(l == nullptr && this->mMemoryList == nullptr){ // Handle full case.
+  if(l == nullptr){ // Handle full case.
     return nullptr;
   }
   std::vector<std::pair<int, int>> ranges ={};
-  if(l != nullptr){
-    u_int16_t *nl = (u_int16_t *)l;
-    u_int16_t count = nl[0];
-    for(int i = 1; i < count * 2 + 1; i++){
-      ranges.push_back({nl[i], nl[i+1]});
-    }
-    delete[] nl;
+  u_int16_t *nl = (u_int16_t *)l;
+  u_int16_t count = nl[0];
+  for(int i = 0; i < count; i++){
+    ranges.push_back({nl[2*i + 1], nl[2*i+2]});
   }
+  delete[] nl;
+  nl =nullptr;
   l = nullptr;
-  std::vector<u_int8_t> res = convertToBinary(ranges, this->mMemorySizeInWords);
+  u_int16_t r = ceil_div(ranges[count - 1].first + ranges[count - 1].second, 8);
+  std::cout << "Ceil div " << r << std::endl;
+  std::vector<u_int8_t> res = convertToBinary(ranges, r);
+  std::cout << "Len: " << res.size() << std::endl;
   std::vector<u_int8_t> mirrRes = mirrorBytes(res);
 
-  uint8_t lowerByte = this->mMemorySizeInWords & 0x00FF; // mask lower byte
+  uint8_t lowerByte = r & 0x00FF; // mask lower byte
 
-  uint8_t upperByte = (this->mMemorySizeInWords >> 8) & 0x00FF; // shift right to get the upper byte
+  uint8_t upperByte = (r >> 8) & 0x00FF; // shift right to get the upper byte
 
-  u_int8_t* result = new u_int8_t[this->mMemorySizeInWords + 2];
+  u_int8_t* result = new u_int8_t[r + 2];
 
   result[0] = lowerByte;
   result[1] = upperByte;
-  for(int i = 2; i < this->mMemorySizeInWords + 2; i++){
+  for(int i = 2; i < r + 2; i++){
     result[i] = mirrRes[i - 2];
   }
 
@@ -462,6 +472,11 @@ std::vector<uint8_t> convertToBinary(const std::vector<std::pair<int, int>>& ran
                 bytes[byteIndex] &= ~(1 << bitIndex); // set the bit to 0
             }
         }
+    }
+    // Errored on case 1.
+    int lastOffset = ranges.back().first + ranges.back().second;
+    if(lastOffset % 8 != 0){
+      bytes[totalBytes - 1] = 0;
     }
 
     return bytes;
